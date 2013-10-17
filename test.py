@@ -1,3 +1,6 @@
+#!/usr/bin/env python  
+
+# -*- coding: utf-8 -*-
 #
 #    PythonFtpServer
 #        @Yangjing Zhang
@@ -13,11 +16,13 @@ import threading
 import time
 
 listen_ip = "localhost"
-listen_port = 21
+listen_port = 2100
 max_connections = 10
 time_out = 100;
 conn_list = []
-root_dir = "d:/test"
+
+root_dir = os.path.abspath(os.path.dirname(__file__))
+ftp_type = "I"
 
 class conn_thread(threading.Thread):
     
@@ -42,7 +47,8 @@ class conn_thread(threading.Thread):
                 'SYST'  :   self.cmd_syst,  #SYSTEM 
                 'RETR'  :   self.cmd_retr,  #RETRIEVE
                 'STOR'  :   self.cmd_store,
-                'APPE'  :   self.cmd_appe
+                'APPE'  :   self.cmd_appe,
+                'SIZE'	:   self.cmd_size
                 }
         
     def run(self):
@@ -63,6 +69,7 @@ class conn_thread(threading.Thread):
                 else:
                     #self.process(line[:space], line[space+1:])
                     self.commands[str(line[:space]).upper()](line[space + 1:])
+                print(" ->",line)
                 line = ""                 
         except:  
             print("error", sys.exc_info())
@@ -83,7 +90,8 @@ class conn_thread(threading.Thread):
     def cmd_user(self, arg):
         self.message(230, "Identified!")
         self.username = arg
-        self.home_dir = root_dir + "/" + self.username
+        self.home_dir = root_dir
+        #self.home_dir = root_dir + "/" + self.username
         
     def cmd_syst(self, arg):
         self.message(200, "UNIX")
@@ -168,7 +176,9 @@ class conn_thread(threading.Thread):
         
     def cmd_retr(self, arg):
         locfile,workingdir = self.get_local_path(arg)
-        if not os.path.isfile(locfile): return 
+        if not os.path.isfile(locfile):
+	    self.message(550, "failed: "+arg+" is not a file")
+	    return 
         if not self.ready_connect(): return
         self.message(150, "ok")
         f = open(locfile, "rb")
@@ -210,6 +220,14 @@ class conn_thread(threading.Thread):
         self.data_fd.close()
         self.data_fd = 0
         self.message(226, "ok")
+
+    def cmd_size(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        if not os.path.exists(locfile):
+            self.message(550, "failed: "+arg+" does not exist")
+            return
+        st = os.stat(locfile)
+        self.message(213, "%s" % (+st[stat.ST_SIZE]))
            
     
     def get_dir_permission(self, path):
@@ -248,10 +266,11 @@ def main():
     listen_fd.listen(1024)
     conn_lock = threading.Lock()
     print("begin listening on", listen_ip + ":" + str(listen_port))
-
+    print("PWD: ",root_dir)
+		
     while True:
         conn_fd, remote_addr = listen_fd.accept()
-        #print "accepted:",remote_addr,"count of conn:",len(conn_list)
+        print "accepted:",remote_addr,"count of conn:",len(conn_list)
         thd = conn_thread(conn_fd)
         conn_list.append(thd)
         thd.start()
@@ -266,3 +285,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
