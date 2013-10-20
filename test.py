@@ -4,7 +4,9 @@
 #
 #    PythonFtpServer
 #        @Yangjing Zhang
-#            zhangyangjing@gmail.com
+#            zhangyangjing at gmail dot com (author)
+#        @Guilherme Martins
+#            ggmartins at gmail dot com (contrib)
 #
 
 import os
@@ -55,7 +57,7 @@ class conn_thread(threading.Thread):
                 'SITE'  :   self.cmd_site,
                 'RNFR'  :   self.cmd_rnfr,
                 'RNTO'  :   self.cmd_rnto,
-                'DELE'		:			self.cmd_dele
+                'DELE'  :   self.cmd_dele
                 }
         
     def run(self):
