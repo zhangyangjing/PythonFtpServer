@@ -57,7 +57,8 @@ class conn_thread(threading.Thread):
                 'SITE'  :   self.cmd_site,
                 'RNFR'  :   self.cmd_rnfr,
                 'RNTO'  :   self.cmd_rnto,
-                'DELE'  :   self.cmd_dele
+                'DELE'  :   self.cmd_dele,
+                'MDTM'  :   self.cmd_mdtm
                 }
         
     def run(self):
@@ -238,6 +239,7 @@ class conn_thread(threading.Thread):
         st = os.stat(locfile)
         self.message(213, "%s" % (+st[stat.ST_SIZE]))
            
+    #todo proper cmd support
     def cmd_site(self, arg):
         locfile,workingdir = self.get_local_path(arg)
         # if not os.path.exists(locfile):
@@ -260,8 +262,6 @@ class conn_thread(threading.Thread):
         if os.path.exists(locfile):
             self.message(501, "failed: filename "+arg+" already exists")
             return
-        print("ok, rename to "+locfile)
-        print("ok, rename from "+self.tmpfile)
         os.rename(self.tmpfile, locfile)
         self.message(250, "ok, rename to "+locfile)
 
@@ -283,6 +283,16 @@ class conn_thread(threading.Thread):
             return
         os.remove(locfile)
         self.message(250, "ok, "+locfile+" removed")
+
+    #todo 2 params support
+    def cmd_mdtm(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        if not os.path.exists(locfile):
+            self.message(501, "failed: filename or dir "+arg+" does not exist")
+            return
+        modtime = time.gmtime(os.stat(locfile).st_mtime)
+        print("modified time: %s" % time.strftime("%Y%m%d%H%M%S"))
+        self.message(213, "%s" % time.strftime("%Y%m%d%H%M%S"))
 
     def cmd_rmd(self, arg):
         locfile,workingdir = self.get_local_path(arg)
@@ -331,7 +341,7 @@ def main():
     listen_fd.bind((listen_ip, listen_port))
     listen_fd.listen(1024)
     conn_lock = threading.Lock()
-    print("begin listening on", listen_ip + ":" + str(listen_port))
+    print("begin listening on ", listen_ip + ":" + str(listen_port))
     print("PWD: ",root_dir)
 		
     while True:
