@@ -4,7 +4,9 @@
 #
 #    PythonFtpServer
 #        @Yangjing Zhang
-#            zhangyangjing@gmail.com
+#            zhangyangjing at gmail dot com (author)
+#        @Guilherme Martins
+#            ggmartins at gmail dot com (contrib)
 #
 
 import os
@@ -33,11 +35,14 @@ class conn_thread(threading.Thread):
         self.working_dir = "/"  #this variable must be end with '/'
         self.data_fd = None
         self.alive_time = time.time()
+        self.tmpfile=""
         self.commands = {
                 'USER'  :   self.cmd_user,  #USER NAME
                 'FEAT'  :   self.cmd_feat,
                 'PWD'   :   self.cmd_pwd,   #PRINT WORKING DIRECTORY
                 'CWD'   :   self.cmd_cwd,   #CHANGE WORKING DIRECTORY
+                'MKD'   :   self.cmd_mkd,   #MAKE DIRECTORY
+                'RMD'   :   self.cmd_rmd,   #REMOVE DIRECTORY
                 'CDUP'  :   self.cmd_cdup,  #CHANGE TO PARENT DIRECTORY
                 'TYPE'  :   self.cmd_type,  #REPRESENTATION TYPE
                 'PASV'  :   self.cmd_pasv,
@@ -48,7 +53,12 @@ class conn_thread(threading.Thread):
                 'RETR'  :   self.cmd_retr,  #RETRIEVE
                 'STOR'  :   self.cmd_store,
                 'APPE'  :   self.cmd_appe,
-                'SIZE'	:   self.cmd_size
+                'SIZE'  :   self.cmd_size,
+                'SITE'  :   self.cmd_site,
+                'RNFR'  :   self.cmd_rnfr,
+                'RNTO'  :   self.cmd_rnto,
+                'DELE'  :   self.cmd_dele,
+                'MDTM'  :   self.cmd_mdtm
                 }
         
     def run(self):
@@ -97,8 +107,8 @@ class conn_thread(threading.Thread):
         self.message(200, "UNIX")
 
     def cmd_feat(self, arg):
-        features = "211-Features:\r\nSITES\r\nEPRT\r\nEPSV\r\nMDTM\r\nPASV\r\n"\
-                "REST STREAM\r\nSIZE\r\nUTF8\r\n211 End\r\n"
+        features = "211-Features:\r\nSITE\r\nRNFR\r\nRNTO\r\nEPRT\r\nEPSV\r\nMDTM\r\nPASV\r\n"\
+                "REST STREAM\r\nSIZE\r\nMKD\r\nDELE\r\nUTF8\r\n211 End\r\n"
         self.conn.send(str(features).encode())
             
     def cmd_pwd(self, arg):
@@ -229,6 +239,72 @@ class conn_thread(threading.Thread):
         st = os.stat(locfile)
         self.message(213, "%s" % (+st[stat.ST_SIZE]))
            
+    #todo proper cmd support
+    def cmd_site(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        # if not os.path.exists(locfile):
+        #    self.message(550, "failed: "+arg+" does not exist")
+        #    return
+        #st = os.stat(locfile)
+        self.message(504, "command not implemented for parameter "+arg)
+
+    def cmd_rnfr(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        self.tmpfile=locfile
+        if not os.path.exists(locfile):
+            self.message(501, "failed: "+arg+" does not exist")
+            return
+        print("ok, rename from "+locfile)
+        self.message(350, "ok, rename from "+locfile)
+
+    def cmd_rnto(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        if os.path.exists(locfile):
+            self.message(501, "failed: filename "+arg+" already exists")
+            return
+        os.rename(self.tmpfile, locfile)
+        self.message(250, "ok, rename to "+locfile)
+
+    def cmd_mkd(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        if os.path.exists(locfile):
+            self.message(501, "failed: filename or dir "+arg+" already exists")
+            return
+        os.mkdir(locfile)
+        self.message(250, "ok, "+locfile+" created")
+
+    def cmd_dele(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        if not os.path.exists(locfile):
+            self.message(501, "failed: filename or dir "+arg+" does not exist")
+            return
+        if not os.path.isfile(locfile):
+            self.message(501, "failed: "+arg+" is a directory")
+            return
+        os.remove(locfile)
+        self.message(250, "ok, "+locfile+" removed")
+
+    #todo 2 params support
+    def cmd_mdtm(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        if not os.path.exists(locfile):
+            self.message(501, "failed: filename or dir "+arg+" does not exist")
+            return
+        modtime = time.gmtime(os.stat(locfile).st_mtime)
+        print("modified time: %s" % time.strftime("%Y%m%d%H%M%S"))
+        self.message(213, "%s" % time.strftime("%Y%m%d%H%M%S"))
+
+    def cmd_rmd(self, arg):
+        locfile,workingdir = self.get_local_path(arg)
+        if not os.path.exists(locfile):
+            self.message(501, "failed: filename or dir "+arg+" does not exist")
+            return
+        if not os.path.isdir(locfile):
+            self.message(501, "failed: "+arg+" is a file")
+            return
+        os.rmdir(locfile)
+        self.message(250, "ok, "+locfile+" removed")
+
     
     def get_dir_permission(self, path):
         return "read,write,modify"
@@ -265,7 +341,7 @@ def main():
     listen_fd.bind((listen_ip, listen_port))
     listen_fd.listen(1024)
     conn_lock = threading.Lock()
-    print("begin listening on", listen_ip + ":" + str(listen_port))
+    print("begin listening on ", listen_ip + ":" + str(listen_port))
     print("PWD: ",root_dir)
 		
     while True:
