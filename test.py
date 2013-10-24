@@ -18,7 +18,7 @@ import threading
 import time
 
 listen_ip = "localhost"
-listen_port = 21
+listen_port = 2100
 max_connections = 10
 time_out = 100;
 conn_list = []
@@ -57,32 +57,39 @@ class conn_thread(threading.Thread):
                 'SITE'  :   self.cmd_site,
                 'RNFR'  :   self.cmd_rnfr,
                 'RNTO'  :   self.cmd_rnto,
-                'DELE'  :   self.cmd_dele,
-                'MDTM'  :   self.cmd_mdtm
+                'DELE'	:   self.cmd_dele,
+                'MDTM'  :   self.cmd_mdtm,
+                'QUIT'  :   self.cmd_quit
                 }
         
     def run(self):
-        self.message(220, "welcome to zhangyangjing's server")
-        try:             
-            line = ""
-            while self.running:
+        self.message(220, "welcome to zhangyangjing's server")             
+        line = ""
+        while self.running:
+            try:
                 self.alive_time = time.time()
                 data = self.conn.recv(4096).decode()
-                if len(data) == 0: break
-                line += data
-                if line[-2:] != "\r\n": continue
-                line = line[:-2]  
-                space = line.find(" ")
-                if space == -1:                
-                    #self.process(line, "")
-                    self.commands[line.upper()]("")
-                else:
-                    #self.process(line[:space], line[space+1:])
-                    self.commands[str(line[:space]).upper()](line[space + 1:])
-                print(" ->",line)
-                line = ""                 
-        except:  
-            print("error", sys.exc_info())
+            except:  
+                print("error", sys.exc_info())
+                break;
+
+            if len(data) == 0: break
+            line += data
+            if line[-2:] != "\r\n": continue
+            line = line[:-2]  
+            line=line.split(None, 1)
+            print(" ->",line)
+            #todo catch-non defined functions
+            try:
+                if len(line) > 1: 
+	            self.commands[str(line[0]).upper()](line[1:])
+	        else:
+	            self.commands[str(line[0]).upper()]("")                
+            except:
+                print("Unsupported FTP CMD: "+str(line[0]).upper())
+                self.message(502, "command not implemented.")
+            line = ""
+            
         self.conn.close()  
         print("connection end", self.conn)
         
@@ -254,7 +261,6 @@ class conn_thread(threading.Thread):
         if not os.path.exists(locfile):
             self.message(501, "failed: "+arg+" does not exist")
             return
-        print("ok, rename from "+locfile)
         self.message(350, "ok, rename from "+locfile)
 
     def cmd_rnto(self, arg):
@@ -284,15 +290,24 @@ class conn_thread(threading.Thread):
         os.remove(locfile)
         self.message(250, "ok, "+locfile+" removed")
 
-    #todo 2 params support
     def cmd_mdtm(self, arg):
-        locfile,workingdir = self.get_local_path(arg)
-        if not os.path.exists(locfile):
-            self.message(501, "failed: filename or dir "+arg+" does not exist")
-            return
-        modtime = time.gmtime(os.stat(locfile).st_mtime)
-        print("modified time: %s" % time.strftime("%Y%m%d%H%M%S"))
-        self.message(213, "%s" % time.strftime("%Y%m%d%H%M%S"))
+	arg=arg[0].split(None, 1)
+	if len(arg) == 1:
+	    arg=arg[0]
+            locfile,workingdir = self.get_local_path(arg)
+            if not os.path.exists(locfile):
+                self.message(501, "failed: filename or dir "+arg+" does not exist")
+                return
+    	    modtime = time.gmtime(os.stat(locfile).st_mtime)
+    	    print("modified time: %s" % time.strftime("%Y%m%d%H%M%S"))
+    	    self.message(213, "%s" % time.strftime("%Y%m%d%H%M%S"))
+        else:
+	    stinfo = os.stat(arg[1])
+	    #print(stinfo)
+	    #todo use timedelta in here
+	    os.utime(arg[1], (stinfo.st_atime, int(arg[0])))
+    	    self.message(213, "ok")
+
 
     def cmd_rmd(self, arg):
         locfile,workingdir = self.get_local_path(arg)
@@ -304,6 +319,9 @@ class conn_thread(threading.Thread):
             return
         os.rmdir(locfile)
         self.message(250, "ok, "+locfile+" removed")
+        
+    def cmd_quit(self, arg):
+        self.running=False
 
     
     def get_dir_permission(self, path):
