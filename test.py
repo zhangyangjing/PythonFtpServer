@@ -18,7 +18,7 @@ import threading
 import time
 
 listen_ip = "localhost"
-listen_port = 21
+listen_port = 2100
 max_connections = 10
 time_out = 100;
 conn_list = []
